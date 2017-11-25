@@ -21,6 +21,16 @@ public static class PythonUtils {
 		return m_engine;
 	}
 
+	public const string defaultPythonConsoleHeader=
+@"
+import clr
+clr.AddReference('UnityEngine','System', 'Assembly-CSharp')
+from UnityEngine import *
+import System.Single
+def float(x):
+	return clr.Convert(x, System.Single)
+";
+
 	public const string defaultPythonScriptHeader=
 @"
 import clr
