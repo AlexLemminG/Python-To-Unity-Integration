@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class PythonScriptsDatabase : ScriptableObject {
-	static string databaseLocation = System.IO.Path.Combine("pythonScriptsDatabase");
+	static string databaseLocation = "pythonScriptsDatabase";
 	static PythonScriptsDatabase s_instance;
 	static PythonScriptsDatabase instance{
 		get{
@@ -45,11 +45,14 @@ public class PythonScriptsDatabase : ScriptableObject {
 		var code = System.IO.File.ReadAllText (assetPath);
 
 		//put asset code pair to database
+		foreach (var ups in instance.m_uniquePythonScripts) {
+			if (ups.asset == null)
+				DestroyImmediate (ups, true);
+		}
+		instance.m_uniquePythonScripts.RemoveAll(x=>x == null || x.asset == null);
 		var assetCodePair = instance.m_uniquePythonScripts.Find (x => x != null && x.asset == asset);
 		if (assetCodePair == null) {
 			assetCodePair = PythonScriptInstance.Create (asset, code);
-			Debug.Log (assetCodePair);
-			Debug.Log (instance);
 			UnityEditor.AssetDatabase.AddObjectToAsset (assetCodePair, instance); 
 
 			instance.m_uniquePythonScripts.Add (assetCodePair);

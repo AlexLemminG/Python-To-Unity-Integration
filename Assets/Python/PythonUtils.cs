@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using IronPython.Hosting;
 using Microsoft.Scripting.Hosting;
+using System.Reflection;
 
 public static class PythonUtils {
 	public static bool IsPythonFile(string path){
@@ -17,13 +18,15 @@ public static class PythonUtils {
 	public static ScriptEngine GetEngine(){
 		if (m_engine == null) {
 			m_engine = Python.CreateEngine ();
+			m_engine.Runtime.LoadAssembly (Assembly.GetAssembly (typeof(GameObject)));
+			m_engine.Runtime.LoadAssembly (Assembly.GetAssembly (typeof(Rigidbody)));
+			m_engine.Runtime.LoadAssembly (Assembly.GetAssembly (typeof(PythonUtils)));
 		}
 		return m_engine;
 	}
 
 	public const string defaultPythonConsoleHeader=
-@"
-import clr
+@"import clr
 clr.AddReference('UnityEngine','System', 'Assembly-CSharp')
 from UnityEngine import *
 import System.Single

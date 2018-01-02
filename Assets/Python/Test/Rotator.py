@@ -10,7 +10,7 @@ def Awake():
 	global copied
 	copied = False
 	global iterations
-	iterations = 18
+	iterations = 20
 def OnEnable():
 	transform.position += Vector3.up
 
@@ -34,7 +34,7 @@ def Update():
 	if not currentT == lastT and not copied and iterations > 0:
 		lastT = currentT
 		copied = True
-		clone = UnityEngine.GameObject.Instantiate(gameObject, transform.position + Vector3(1,0,0), UnityEngine.Quaternion.identity)
+		clone = UnityEngine.GameObject.Instantiate(gameObject, transform.position + Vector3(1,1,0), UnityEngine.Quaternion.identity)
 		clone.name = gameObject.name
 		clone.transform.parent = transform
 		clone.GetComponent[Renderer]().material.color = Color.HSVToRGB(Mathf.Repeat((clone.transform.position.x - iterations) /float(16.0), 1.0), 1, 1)
