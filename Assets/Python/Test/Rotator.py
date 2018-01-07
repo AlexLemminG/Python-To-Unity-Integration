@@ -5,6 +5,7 @@ import UnityEngine
 Time = UnityEngine.Time()
 Mathf = UnityEngine.Mathf()
 lastT = int(Time.time*10)
+Debug = UnityEngine.Debug
 
 def Awake():
 	global copied
@@ -12,10 +13,12 @@ def Awake():
 	global iterations
 	iterations = 20
 def OnEnable():
-	transform.position += Vector3.up
+	pass
+	#transform.position += Vector3.up
 
 def OnDisable():
-	transform.position -= Vector3.up
+	pass
+	#transform.position -= Vector3.up
 
 def Update():
 	global lastT
@@ -23,7 +26,7 @@ def Update():
 	global iterations
 	currentT = int(Time.time*10)
 	if currentT > 20:
-		transform.Rotate(0, UnityEngine.Mathf.Sin((Time.time*10-21)/100)*18*Time.deltaTime,0)
+		transform.Rotate(0, UnityEngine.Mathf.Sin((Time.time*10-21)/100)*18*Time.deltaTime*1,0)
 		rot = transform.localEulerAngles
 		rot[2] = 0
 		transform.localEulerAngles = rot

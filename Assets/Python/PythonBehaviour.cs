@@ -3,7 +3,19 @@ using Microsoft.Scripting.Hosting;
 
 public class PythonBehaviour : MonoBehaviour {
 	[SerializeField]
-	PythonScript script;
+	protected PythonScript m_script;
+	public PythonScript script{
+		get{
+			return m_script;
+		}
+		set{
+			if (m_script != value) {
+				scopeInitializedWithScript = false;
+				m_script = value;
+			}
+		}
+	}
+	
 
 	private ScriptScope m_scope;
 	public ScriptScope scope {
@@ -32,12 +44,13 @@ public class PythonBehaviour : MonoBehaviour {
 
 	int scriptUpdateCount = -1;
 	bool scopeInitializedWithScript;
-
-
 	void CheckConsistency(){
+		FixBrokenReferenceBug ();
 		if (m_scope == null) {
 			InitScope ();
 		}
+		if (script == null)
+			return;
 		if(script.updateCount != scriptUpdateCount || !scopeInitializedWithScript){
 			script.Execute (m_scope);
 
@@ -56,6 +69,18 @@ public class PythonBehaviour : MonoBehaviour {
 
 			CallOnScopeUpdated ();
 		}
+	}
+
+	void FixBrokenReferenceBug(){
+		#if UNITY_EDITOR
+		if (script == null && !Object.ReferenceEquals (script, null)) {
+			var so = new UnityEditor.SerializedObject (this);
+			var id = script.GetInstanceID ();
+			so.FindProperty ("script").objectReferenceInstanceIDValue = 0;
+			so.FindProperty ("script").objectReferenceInstanceIDValue = id;
+			so.ApplyModifiedPropertiesWithoutUndo ();
+		}
+		#endif
 	}
 
 	void CallOnScopeUpdated(){
@@ -83,6 +108,8 @@ public class PythonBehaviour : MonoBehaviour {
 
 	void CallAction(ref System.Action action){
 		CheckConsistency ();
+		if (script == null || script.compiledWithError)
+			return;
 		if (action != null) {
 			try{
 				action ();
@@ -116,7 +143,7 @@ public class PythonBehaviour : MonoBehaviour {
 	protected void Start(){
 		CallAction (ref start);
 	}
-	protected void Awake(){
+	protected virtual void Awake(){
 		CallAction (ref awake);
 	}
 	protected void OnDestroy(){

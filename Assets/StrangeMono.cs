@@ -28,4 +28,5 @@ public class StrangeMono : MonoBehaviour {
 			Debug.LogError ("this is some strange error");
 		}
 	}
+	public PythonScript ase;
 }

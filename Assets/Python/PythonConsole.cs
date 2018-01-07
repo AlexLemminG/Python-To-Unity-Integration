@@ -3,24 +3,65 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using Microsoft.Scripting.Hosting;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using System;
 using System.Text;
 using System.Reflection;
 
 public class PythonConsole : MonoBehaviour {
-	public bool visibleByDefault = true;
-
 	public TMP_InputField input;
 	public TMP_Text text;
 	public ScrollRect scroll;
 	public RectTransform panel;
 
-	List<string> m_previousCommands = new List<string>();
-	int m_previousCommandSelected = 0;
+	const bool c_visibleByDefault = false;
+	const float appearSpeed = 6f;
 
+	List<string> m_previousCommands = new List<string>();
+	int m_previousCommandSelected;
 	ScriptScope m_scope;
+	bool m_visible = true;
+	string m_prevFrameInputText = "";
+	bool m_commandExecutionInProgress;
+	string m_log;
+	bool m_suspendNextMessage;
+	bool m_listeningToDevelopmentConsole = true;
+	Coroutine m_toggleVisibilityCoroutine;
+
+	public void Select(UnityEngine.Object o){
+		#if UNITY_EDITOR
+		UnityEditor.Selection.activeObject = o;
+		#else
+		m_scope.SetVariable ("selection", o);
+		#endif
+	}
+
+	public void Clear(){
+		text.text = "";
+		m_suspendNextMessage = true;
+	}
+
+	public void ShowLog(){
+		m_listeningToDevelopmentConsole = true;
+		Application.logMessageReceived -= PrintLogMessageToConsole;
+		Application.logMessageReceived += PrintLogMessageToConsole;
+	}
+
+	public void HideLog(){
+		m_listeningToDevelopmentConsole = false;
+		Application.logMessageReceived -= PrintLogMessageToConsole;
+	}
+
+	//used to write by python (definition is important)
+	public void write(string s){
+		if (string.IsNullOrEmpty (s) || s == "\n")
+			return;
+		m_log += "\n<i>" + ">>>"+s + "</i> ";
+	}
+
+	bool ShouldToggleConsole(){
+		return Input.GetKeyDown (KeyCode.BackQuote);
+	}
 
 	void OnDisable(){
 		input.onSubmit.RemoveListener (ExecuteCommand);
@@ -28,9 +69,8 @@ public class PythonConsole : MonoBehaviour {
 	}
 
 	void Start(){
-		SetVisible (visibleByDefault, true);
+		SetVisible (c_visibleByDefault, true);
 	}
-
 
 	void OnEnable(){
 		input.onSubmit.AddListener (ExecuteCommand);
@@ -38,32 +78,19 @@ public class PythonConsole : MonoBehaviour {
 		if (m_scope == null) {
 			RecreateScope ();
 		}
-		if (listeningToDevelopmentConsole)
+		if (m_listeningToDevelopmentConsole)
 			ShowLog ();
 	}
 
 	void RecreateScope(){
 		m_scope = PythonUtils.GetEngine ().CreateScope ();
 		m_scope.SetVariable ("console", this);
-		var fullScript = PythonUtils.defaultPythonConsoleHeader + GlobalAssemblyImport () +
-			@"
-import sys
-sys.stdout=console
-Select = console.Select
-import UnityEngine
-Destroy = UnityEngine.Object.Destroy
-FindObjectOfType = UnityEngine.Object.FindObjectOfType
-FindObjectsOfType = UnityEngine.Object.FindObjectsOfType
-DontDestroyOnLoad = UnityEngine.Object.DontDestroyOnLoad
-DestroyImmediate = UnityEngine.Object.DestroyImmediate
-Instantiate = UnityEngine.Object.Instantiate
-Clear = console.Clear
-";
+		var fullScript = PythonUtils.defaultPythonConsoleHeader + GlobalAssemblyImport ();
 		PythonUtils.GetEngine ().Execute (fullScript, m_scope);
 	}
 
-	string GlobalAssemblyImport(){
-		StringBuilder import = new StringBuilder();
+	static string GlobalAssemblyImport(){
+		var import = new StringBuilder();
 		import.Append ("\nimport ");
 		bool importedOne = false;
 		var globalTypes = Assembly.GetAssembly (typeof(PythonConsole)).GetTypes ();
@@ -80,42 +107,63 @@ Clear = console.Clear
 		return import.ToString ();
 	}
 
-	void Update(){
+	void UpdateSubmitButtonReaction ()
+	{
+		TMP_InputField.LineType preferedLineType;
+		if (Input.GetKey (KeyCode.LeftShift) || Input.GetKey (KeyCode.RightShift)) {
+			preferedLineType = TMP_InputField.LineType.MultiLineNewline;
+		}
+		else {
+			preferedLineType = TMP_InputField.LineType.MultiLineSubmit;
+		}
+		//setting lineType every frame makes garbage
+		if (input.lineType != preferedLineType) {
+			input.lineType = preferedLineType;
+		}
+	}
+
+	void UpdateSelection ()
+	{
 		#if UNITY_EDITOR
 		if (Application.isEditor) {
 			m_scope.SetVariable ("selection", UnityEditor.Selection.activeObject);
 		}
 		#endif
+	}
 
-		if (Input.GetKeyDown (KeyCode.BackQuote)) {
+	void Update(){
+		UpdateSelection ();
+
+		if (ShouldToggleConsole()) {
+			input.text = m_prevFrameInputText;
 			ToggleVisibility ();
 		}
 
 		if (!input.isFocused)
 			return;
+		
 		HandleSelectPreviousCommand ();
 
-		if (Input.GetKey (KeyCode.LeftShift) || Input.GetKey (KeyCode.RightShift)) {
-			input.lineType = TMP_InputField.LineType.MultiLineNewline;
-		} else {
-			input.lineType = TMP_InputField.LineType.MultiLineSubmit;
-		}
+		UpdateSubmitButtonReaction ();
+
 		input.GetComponent<LayoutElement> ().preferredHeight = input.textComponent.preferredHeight + 8;
 
+		m_prevFrameInputText = input.text;
 	}
 
-	bool visible = true;
 	void ToggleVisibility (bool immediately = false){
-		SetVisible (!visible, immediately);
+		SetVisible (!m_visible, immediately);
 	}
 
 	void SetVisible(bool value, bool immediately){
-		visible = value;
-		StopAllCoroutines ();
-		StartCoroutine (ToggleVIsibilityCoroutine(visible, immediately));
+		m_visible = value;
+		if (m_toggleVisibilityCoroutine != null) {
+			StopCoroutine (m_toggleVisibilityCoroutine);
+		}
+		m_toggleVisibilityCoroutine = StartCoroutine (ToggleVisibilityCoroutine(m_visible, immediately));
 	}
 
-	IEnumerator ToggleVIsibilityCoroutine(bool makeVisible, bool immediately){
+	IEnumerator ToggleVisibilityCoroutine(bool makeVisible, bool immediately){
 
 		if (makeVisible) {
 			panel.gameObject.SetActive (true);
@@ -129,7 +177,6 @@ Clear = console.Clear
 		Vector2 minAnchorAtStart = panel.anchorMin;
 		Vector2 maxAnchorAtStart = panel.anchorMax;
 
-		float appearSpeed = 6f;
 		float t = immediately ? 1f : 0f;
 		while (t <= 1f) {
 			t += Time.unscaledDeltaTime * appearSpeed;
@@ -174,7 +221,6 @@ Clear = console.Clear
 		}
 	}
 
-	bool m_commandExecutionInProgress = false;
 	void ExecuteCommand (string command){
 		if (input.wasCanceled) {
 			input.ActivateInputField ();
@@ -193,83 +239,62 @@ Clear = console.Clear
 			PythonUtils.GetEngine ().Execute (command, m_scope);
 		}catch(Exception e){
 			exception = true;
-			//			Debug.LogException (e);
 			write (e.Message);
 		}
 		m_commandExecutionInProgress = false;
 
 		var commandLog = "\n<b>" + (exception ? "<color=#d22>" : "") + command + (exception ? "</color=#f66>" : "") + "</b> ";
-		log = commandLog + log;
+		m_log = commandLog + m_log;
 
 		FlushLog ();
+		scroll.verticalNormalizedPosition = 0f;
 	}
 
 	void FlushLog(){
 		if (!m_suspendNextMessage) {
-			text.text += log;
-			log = "";
-		}{
-			m_suspendNextMessage = false;
+			text.text += m_log;
 		}
+		m_suspendNextMessage = false;
+		m_log = "";
 
-		scroll.verticalNormalizedPosition = 0f;
+		UpdateScrollPositionAfterMove ();
 	}
 
-	string log;
-	public void write(string s){
-		if (string.IsNullOrEmpty (s) || s == "\n")
-			return;
-		log += "\n<i>" + ">>>"+s + "</i> ";
-	}
+	void UpdateScrollPositionAfterMove(){
+		var viewportHeight = scroll.GetComponent<RectTransform> ().sizeDelta.y;
+		var oldHeight = scroll.content.sizeDelta.y - viewportHeight;
+		float pos = scroll.verticalNormalizedPosition;
 
-	public void Select(UnityEngine.Object o){
-		#if UNITY_EDITOR
-		UnityEditor.Selection.activeObject = o;
-		#else
-		m_scope.SetVariable ("selection", o);
-		#endif
-	}
+		Canvas.ForceUpdateCanvases ();
 
-	bool m_suspendNextMessage = false;
-	public void Clear(){
-		text.text = "";
-		m_suspendNextMessage = true;
-	}
-
-	bool listeningToDevelopmentConsole = false;
-
-	public void ShowLog(){
-		listeningToDevelopmentConsole = true;
-		Application.logMessageReceived -= PrintLogMessageToConsole;
-		Application.logMessageReceived += PrintLogMessageToConsole;
+		var newHeight = scroll.content.sizeDelta.y - viewportHeight;
+		if (pos * oldHeight < 20f)
+			scroll.verticalNormalizedPosition = 0f;
+		else
+			scroll.verticalNormalizedPosition = (pos*oldHeight + (newHeight - oldHeight)) / newHeight;
 	}
 
 	void PrintLogMessageToConsole (string condition, string stackTrace, LogType type){
-		string colorHex = "#000";
+		Color color = Color.black;
 		bool printStackTrace = false;
 		switch (type) {
 		case LogType.Assert:
 		case LogType.Error:
 		case LogType.Exception:
-			colorHex = "#f00";
+			color = Color.red;
 			printStackTrace = true;
 			break;
 		case LogType.Warning:
-			colorHex = "#ff0";
+			color = Color.yellow;
 			break;
 		}
-		var message = "[" + type.ToString() + "] " + condition + (printStackTrace ? "\n" + stackTrace : "");
+		var colorHex = "#" + ColorUtility.ToHtmlStringRGBA(color);
+		var message = "[" + type + "] " + condition + (printStackTrace ? "\n" + stackTrace : "");
 		message = "<color="+colorHex+">" + message + "</color="+colorHex+">";
-//		write (message);
-		log += "\n<i>" + message + "</i> ";
+		m_log += "\n<i>" + message + "</i> ";
 
 		if (!m_commandExecutionInProgress) {
 			FlushLog ();
 		}
-	}
-
-	public void HideLog(){
-		listeningToDevelopmentConsole = false;
-		Application.logMessageReceived -= PrintLogMessageToConsole;
 	}
 }

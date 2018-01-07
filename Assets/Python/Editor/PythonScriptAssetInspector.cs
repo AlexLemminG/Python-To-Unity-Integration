@@ -3,7 +3,7 @@ using UnityEditor.Experimental.AssetImporters;
 using System.IO;
 using UnityEditor;
 
-[CustomEditor(typeof(PythonScriptAsset))]
+[CustomEditor(typeof(PythonScript))]
 public class PythonScriptAssetInspector:Editor{
 	private const int kMaxChars = 7000;
 	private GUIStyle m_TextStyle;
@@ -14,11 +14,10 @@ public class PythonScriptAssetInspector:Editor{
 		}
 		bool enabled = GUI.enabled;
 		GUI.enabled = true;
-		PythonScriptAsset textAsset = base.target as PythonScriptAsset;
+		PythonScript textAsset = base.target as PythonScript;
 		if (textAsset != null) {
 			string text;
 			if (base.targets.Length > 1) {
-//				text = this.targetTitle;
 				text = "";
 			} else {
 				text = textAsset.text;
