@@ -10,13 +10,15 @@ using System.Reflection;
 
 public class PythonConsole : MonoBehaviour {
 	public TMP_InputField input;
-	public TMP_Text text;
+	public RectTransform textsRoot;
+	public TMP_Text textTemplate;
 	public ScrollRect scroll;
 	public RectTransform panel;
 
 	const bool c_visibleByDefault = false;
 	const float appearSpeed = 6f;
 
+	private RectTransform lastTextTransform;
 	List<string> m_previousCommands = new List<string>();
 	int m_previousCommandSelected;
 	ScriptScope m_scope;
@@ -37,7 +39,14 @@ public class PythonConsole : MonoBehaviour {
 	}
 
 	public void Clear(){
-		text.text = "";
+		var textTemplateTransform = textTemplate.transform;
+		for(int i = textsRoot.childCount-1; i>=0; i--){
+			var textTransform = textsRoot.GetChild(i);
+			if(textTransform != textTemplateTransform){
+				Destroy(textTransform.gameObject);
+			}
+		}
+		lastTextTransform = null;
 		m_suspendNextMessage = true;
 	}
 
@@ -56,7 +65,8 @@ public class PythonConsole : MonoBehaviour {
 	public void write(string s){
 		if (string.IsNullOrEmpty (s) || s == "\n")
 			return;
-		m_log += "\n<i>" + ">>>"+s + "</i> ";
+		var message = (string.IsNullOrEmpty(m_log) ? "" : "\n") +"<i>" + ">>>"+s + "</i> ";
+		m_log += message;
 	}
 
 	bool ShouldToggleConsole(){
@@ -125,9 +135,7 @@ public class PythonConsole : MonoBehaviour {
 	void UpdateSelection ()
 	{
 		#if UNITY_EDITOR
-		if (Application.isEditor) {
-			m_scope.SetVariable ("selection", UnityEditor.Selection.activeObject);
-		}
+		m_scope.SetVariable ("selection", UnityEditor.Selection.activeObject);
 		#endif
 	}
 
@@ -146,6 +154,7 @@ public class PythonConsole : MonoBehaviour {
 
 		UpdateSubmitButtonReaction ();
 
+		
 		input.GetComponent<LayoutElement> ().preferredHeight = input.textComponent.preferredHeight + 8;
 
 		m_prevFrameInputText = input.text;
@@ -166,28 +175,20 @@ public class PythonConsole : MonoBehaviour {
 	IEnumerator ToggleVisibilityCoroutine(bool makeVisible, bool immediately){
 
 		if (makeVisible) {
-			panel.gameObject.SetActive (true);
+			panel.GetComponentInParent<Canvas>().enabled = true;
 		} else {
 			input.interactable = false;
 		}
-
-		Vector2 targetMaxAnchor = makeVisible ? new Vector2 (1, 1) : new Vector2 (1, 2);
-		Vector2 targetMinAnchor = makeVisible ? new Vector2 (0, 0) : new Vector2 (0, 1);
-
-		Vector2 minAnchorAtStart = panel.anchorMin;
-		Vector2 maxAnchorAtStart = panel.anchorMax;
-
 		float t = immediately ? 1f : 0f;
 		while (t <= 1f) {
 			t += Time.unscaledDeltaTime * appearSpeed;
-			panel.anchorMin = Vector2.Lerp (minAnchorAtStart, targetMinAnchor, t);
-			panel.anchorMax = Vector2.Lerp (maxAnchorAtStart, targetMaxAnchor, t);
+			panel.GetComponent<Animator>().SetFloat("Appeared", makeVisible ? t : 1f - t);
 			if (t <= 1f) {
 				yield return null;
 			}
 		}
 		if (!makeVisible) {
-			panel.gameObject.SetActive (false);
+			panel.GetComponentInParent<Canvas>().enabled = false;
 		} else {
 			input.interactable = true;
 			input.ActivateInputField ();
@@ -243,8 +244,12 @@ public class PythonConsole : MonoBehaviour {
 		}
 		m_commandExecutionInProgress = false;
 
-		var commandLog = "\n<b>" + (exception ? "<color=#d22>" : "") + command + (exception ? "</color=#f66>" : "") + "</b> ";
-		m_log = commandLog + m_log;
+		var commandLog = "<b>" + (exception ? "<color=#d22>" : "") + command + (exception ? "</color=#f66>" : "") + "</b>";
+		if(string.IsNullOrEmpty(m_log)){
+			m_log = commandLog;
+		}else{
+			m_log =  commandLog + "\n" + m_log;
+		}
 
 		FlushLog ();
 		scroll.verticalNormalizedPosition = 0f;
@@ -252,7 +257,19 @@ public class PythonConsole : MonoBehaviour {
 
 	void FlushLog(){
 		if (!m_suspendNextMessage) {
-			text.text += m_log;
+			var text = Instantiate(textTemplate, textsRoot);
+			text.text = m_log + " ";
+			Vector2 pos;
+			if(lastTextTransform != null){
+				pos = lastTextTransform.anchoredPosition - Vector2.up * text.preferredHeight;
+			}else{
+				pos = textTemplate.rectTransform.anchoredPosition - Vector2.up * text.preferredHeight;
+			}
+			lastTextTransform = text.rectTransform;
+			lastTextTransform.anchoredPosition = pos;
+			var rootSize = textsRoot.sizeDelta;
+			rootSize.y = pos.y - 6;
+			textsRoot.sizeDelta = rootSize;
 		}
 		m_suspendNextMessage = false;
 		m_log = "";
@@ -291,7 +308,11 @@ public class PythonConsole : MonoBehaviour {
 		var colorHex = "#" + ColorUtility.ToHtmlStringRGBA(color);
 		var message = "[" + type + "] " + condition + (printStackTrace ? "\n" + stackTrace : "");
 		message = "<color="+colorHex+">" + message + "</color="+colorHex+">";
-		m_log += "\n<i>" + message + "</i> ";
+		if(string.IsNullOrEmpty(m_log)){
+			m_log = "<i>" + message + "</i> ";
+		}else{
+			m_log += "\n<i>" + message + "</i> ";
+		}
 
 		if (!m_commandExecutionInProgress) {
 			FlushLog ();

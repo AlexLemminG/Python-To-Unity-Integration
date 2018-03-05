@@ -18,7 +18,7 @@ public class StrangeMono : MonoBehaviour {
 			external = objs ["external"].ToString ();
 		}
 
-		if (Input.GetKeyDown (KeyCode.F1)) {
+		if (Input.GetKey (KeyCode.F1)) {
 			Debug.Log ("this is some strange text");
 		}
 		if (Input.GetKeyDown (KeyCode.F2)) {
