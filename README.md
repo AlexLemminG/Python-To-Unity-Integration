@@ -12,6 +12,5 @@ Use it to debug your game when needed, test features without need to create ui e
 ## Things still need to be done
 - use classes for behaviour .py scripts
 - autocompletion for console
-- performance optimization for console with lots of text
 - import all assemblies by default in console
 - security stuff for both console and behaviour
