@@ -38,17 +38,17 @@ public class PythonScriptCreator
 class DoCreatePythonScript : EndNameEditAction
 {
     static string TemplateText = @"
-    import PythonBehaviour
-    import UnityEngine
+import PythonBehaviour
+import UnityEngine
 
-    # Start is called before the first frame update
-    def Start():
-        pass
+# Start is called before the first frame update
+def Start():
+    pass
 
-    # Update is called once per frame
-    def Update():
-        pass
-    ";
+# Update is called once per frame
+def Update():
+    pass
+";
     
     public override void Action(int instanceId, string pathName, string resourceFile)
     {
